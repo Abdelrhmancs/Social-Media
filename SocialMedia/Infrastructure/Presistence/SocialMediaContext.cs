@@ -1,4 +1,4 @@
-﻿using API.Domain.Entites;
+using API.Domain.Entites;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +18,10 @@ namespace Infrastructure.Presistence
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<Post> Posts { get; set; }
         public DbSet<Share> Shares { get; set; }
+        public DbSet<Conversation> Conversations { get; set; }
+        public DbSet<ConversationMember> ConversationMembers { get; set; }
+        public DbSet<Message> Messages { get; set; }
+        public DbSet<MessageReadReceipt> MessageReadReceipts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -187,6 +191,101 @@ namespace Infrastructure.Presistence
 
                 entity.HasIndex(e => new { e.UserId, e.PostId })
                     .IsUnique();
+            });
+
+            // ================= CONVERSATIONS =================
+            modelBuilder.Entity<Conversation>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("conversations");
+                
+                entity.Property(e => e.Type).HasColumnName("type");
+                entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(100);
+                entity.Property(e => e.GroupPicture).HasColumnName("group_picture").HasMaxLength(255);
+                entity.Property(e => e.CreatedAt)
+                    .HasColumnName("created_at")
+                    .HasColumnType("datetime")
+                    .HasDefaultValueSql("(getdate())");
+            });
+
+            // ================= CONVERSATION MEMBERS =================
+            modelBuilder.Entity<ConversationMember>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("conversation_members");
+
+                entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
+                entity.Property(e => e.UserId).HasColumnName("user_id");
+                entity.Property(e => e.Role).HasColumnName("role");
+                entity.Property(e => e.JoinedAt)
+                    .HasColumnName("joined_at")
+                    .HasColumnType("datetime")
+                    .HasDefaultValueSql("(getdate())");
+
+                entity.HasOne(d => d.Conversation)
+                    .WithMany(p => p.Members)
+                    .HasForeignKey(d => d.ConversationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(d => d.User)
+                    .WithMany(p => p.ConversationMembers)
+                    .HasForeignKey(d => d.UserId)
+                    .OnDelete(DeleteBehavior.ClientSetNull);
+
+                entity.HasIndex(e => new { e.ConversationId, e.UserId }).IsUnique();
+            });
+
+            // ================= MESSAGES =================
+            modelBuilder.Entity<Message>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("messages");
+
+                entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
+                entity.Property(e => e.SenderId).HasColumnName("sender_id");
+                entity.Property(e => e.Content).HasColumnName("content").HasMaxLength(2000);
+                entity.Property(e => e.Type).HasColumnName("type");
+                entity.Property(e => e.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
+                entity.Property(e => e.SentAt)
+                    .HasColumnName("sent_at")
+                    .HasColumnType("datetime")
+                    .HasDefaultValueSql("(getdate())");
+
+                entity.HasOne(d => d.Conversation)
+                    .WithMany(p => p.Messages)
+                    .HasForeignKey(d => d.ConversationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(d => d.Sender)
+                    .WithMany(p => p.SentMessages)
+                    .HasForeignKey(d => d.SenderId)
+                    .OnDelete(DeleteBehavior.ClientSetNull);
+            });
+
+            // ================= MESSAGE READ RECEIPTS =================
+            modelBuilder.Entity<MessageReadReceipt>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("message_read_receipts");
+
+                entity.Property(e => e.MessageId).HasColumnName("message_id");
+                entity.Property(e => e.UserId).HasColumnName("user_id");
+                entity.Property(e => e.ReadAt)
+                    .HasColumnName("read_at")
+                    .HasColumnType("datetime")
+                    .HasDefaultValueSql("(getdate())");
+
+                entity.HasOne(d => d.Message)
+                    .WithMany(p => p.ReadReceipts)
+                    .HasForeignKey(d => d.MessageId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(d => d.User)
+                    .WithMany(p => p.MessageReadReceipts)
+                    .HasForeignKey(d => d.UserId)
+                    .OnDelete(DeleteBehavior.ClientSetNull);
+
+                entity.HasIndex(e => new { e.MessageId, e.UserId }).IsUnique();
             });
         }
     }
