@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat System Tester</title>
+<script src="https://unpkg.com/@microsoft/signalr@8.0.7/dist/browser/signalr.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
+  header { background: #1e293b; padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #334155; flex-wrap: wrap; }
+  header input { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 6px 10px; border-radius: 6px; width: 240px; }
+  header button { background: #2563eb; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+  header button:disabled { background: #475569; cursor: not-allowed; }
+  #connStatus { font-size: 13px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #ef4444; margin-right: 5px; }
+  .dot.on { background: #22c55e; }
+  main { flex: 1; display: grid; grid-template-columns: 320px 1fr 300px; gap: 12px; padding: 12px; min-height: 0; }
+  @media (max-width: 1000px) { main { grid-template-columns: 300px 1fr; } #eventPanel { grid-column: 1 / -1; max-height: 200px; } }
+  .panel { background: #1e293b; border: 1px solid #334155; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .panel > h3 { margin: 0; padding: 10px 14px; font-size: 14px; background: #273449; border-bottom: 1px solid #334155; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 10px; min-height: 0; }
+  input[type=text], input[type=email], input[type=password], textarea { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 7px 10px; border-radius: 6px; width: 100%; margin: 4px 0; }
+  label { font-size: 12px; color: #94a3b8; }
+  button.small { background: #334155; color: #e2e8f0; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  button.small:hover { background: #475569; }
+  button.primary { background: #2563eb; }
+  .tabs { display: flex; margin-bottom: 8px; }
+  .tabs button { flex: 1; background: #334155; color: #e2e8f0; border: none; padding: 7px; cursor: pointer; font-size: 13px; }
+  .tabs button.active { background: #2563eb; color: #fff; }
+  .conv { padding: 10px; border-bottom: 1px solid #1e293b; cursor: pointer; border-radius: 8px; }
+  .conv:hover { background: #273449; }
+  .conv.active { background: #1d4ed8; }
+  .conv .name { font-weight: 600; display: flex; justify-content: space-between; }
+  .conv .last { font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .online { color: #22c55e; font-size: 11px; }
+  .offline { color: #64748b; font-size: 11px; }
+  .badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; background: #334155; }
+  #chatHeader { padding: 10px 14px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+  #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .msg { max-width: 70%; padding: 7px 11px; border-radius: 12px; font-size: 14px; line-height: 1.35; word-break: break-word; }
+  .msg.mine { align-self: flex-end; background: #1d4ed8; }
+  .msg.theirs { align-self: flex-start; background: #334155; }
+  .msg .meta { font-size: 10px; opacity: .75; margin-top: 3px; }
+  .msg .sender { font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+  .msg .seen { font-size: 10px; color: #7dd3fc; }
+  #typingIndicator { height: 18px; font-size: 12px; color: #7dd3fc; padding: 0 14px; }
+  #msgForm { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #334155; }
+  #msgInput { flex: 1; }
+  #msgForm button { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 0 18px; cursor: pointer; }
+  #eventLog { font-family: Consolas, monospace; font-size: 12px; }
+  .ev { padding: 4px 0; border-bottom: 1px solid #1e293b; }
+  .ev .t { color: #64748b; }
+  .ev .n { color: #38bdf8; font-weight: 600; }
+  .ev .d { color: #94a3b8; word-break: break-all; }
+  .hint { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+  .empty { color: #64748b; text-align: center; margin-top: 30px; font-size: 13px; }
+  .member-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
+  .member-row .you { color: #38bdf8; }
+  .hidden { display: none; }
+  .copy { cursor: pointer; color: #7dd3fc; font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <input id="baseUrl" value="http://localhost:5221" title="API base URL">
+  <button id="applyBase" class="small">Set base URL</button>
+  <span id="connStatus"><span class="dot" id="connDot"></span> Not connected</span>
+  <span style="flex:1"></span>
+  <span id="userLabel" style="font-size:13px"></span>
+  <button id="logoutBtn" class="small hidden">Logout</button>
+</header>
+
+<main>
+  <!-- LEFT: auth + conversations -->
+  <section class="panel">
+    <h3 id="leftTitle">Account</h3>
+    <div class="panel-body">
+      <!-- Auth forms -->
+      <div id="authBox">
+        <div class="tabs">
+          <button id="tabLogin" class="active">Login</button>
+          <button id="tabRegister">Register</button>
+        </div>
+        <form id="loginForm">
+          <input type="email" placeholder="Email" id="loginEmail">
+          <input type="password" placeholder="Password" id="loginPassword">
+          <button class="small primary" style="width:100%;margin-top:6px">Login</button>
+        </form>
+        <form id="registerForm" class="hidden">
+          <input type="text" placeholder="Name" id="regName">
+          <input type="email" placeholder="Email" id="regEmail">
+          <input type="password" placeholder="Password" id="regPassword">
+          <button class="small primary" style="width:100%;margin-top:6px">Register</button>
+        </form>
+      </div>
+      <!-- Logged in info -->
+      <div id="userBox" class="hidden">
+        <div style="font-weight:600" id="userName"></div>
+        <div style="font-size:12px;color:#94a3b8" id="userEmail"></div>
+        <div style="font-size:12px;margin-top:4px">My user ID:
+          <span class="copy" id="myUserId" title="click to copy"></span>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="small primary" id="newDmBtn">New DM</button>
+          <button class="small" id="newGroupBtn">New Group</button>
+          <button class="small" id="refreshConvBtn">Refresh</button>
+        </div>
+        <div id="newDmForm" class="hidden" style="margin-top:8px">
+          <label>Target user ID (paste other user's ID)</label>
+          <input type="text" id="dmTargetId">
+          <button class="small primary" id="createDmBtn" style="width:100%">Create / Open DM</button>
+        </div>
+        <div id="newGroupForm" class="hidden" style="margin-top:8px">
+          <label>Group name</label>
+          <input type="text" id="groupName">
+          <label>Member IDs (comma separated)</label>
+          <input type="text" id="groupMembers">
+          <button class="small primary" id="createGroupBtn" style="width:100%">Create Group</button>
+        </div>
+        <div style="margin-top:12px;border-top:1px solid #334155;padding-top:8px">
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">CONVERSATIONS</div>
+          <div id="convList"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CENTER: chat -->
+  <section class="panel">
+    <div id="chatHeader">
+      <div>
+        <div style="font-weight:600" id="chatTitle">Select a conversation</div>
+        <div style="font-size:12px;color:#94a3b8" id="chatSub"></div>
+      </div>
+      <div>
+        <button class="small" id="receiptsBtn" disabled>Read receipts</button>
+      </div>
+    </div>
+    <div id="messages"><div class="empty">Pick a conversation on the left, or create a new DM/group.<br>Open this page in two browser tabs with different accounts to chat between them.</div></div>
+    <div id="typingIndicator"></div>
+    <form id="msgForm" class="hidden">
+      <input type="text" id="msgInput" placeholder="Type a message..." autocomplete="off">
+      <button type="submit">Send</button>
+    </form>
+  </section>
+
+  <!-- RIGHT: event log + group manage -->
+  <section class="panel" id="eventPanel">
+    <h3>Realtime events</h3>
+    <div class="panel-body" id="eventLog"><div class="hint">SignalR events will appear here.</div></div>
+    <h3 id="membersTitle" class="hidden">Members</h3>
+    <div id="membersBox" class="hidden" style="padding:10px;border-top:1px solid #334155;max-height:180px;overflow-y:auto">
+      <div id="memberList"></div>
+      <div style="margin-top:8px">
+        <input type="text" id="addMemberId" placeholder="User ID to add">
+        <button class="small primary" id="addMemberBtn" style="width:100%">Add member</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const state = {
+  baseUrl: localStorage.getItem("chatBase") || "http://localhost:5221",
+  token: null,
+  me: null,           // { id, name, email }
+  connection: null,
+  conversations: [],
+  currentConv: null,  // ConversationDto
+  messages: [],
+  typing: {},         // convId -> { userId: timestamp }
+};
+
+// ---------- helpers ----------
+function $(id) { return document.getElementById(id); }
+
+function logEvent(name, data) {
+  const el = $("eventLog");
+  const div = document.createElement("div");
+  div.className = "ev";
+  const d = new Date().toLocaleTimeString();
+  div.innerHTML = `<span class="t">${d}</span> <span class="n">${name}</span><br><span class="d">${JSON.stringify(data)}</span>`;
+  el.prepend(div);
+}
+
+function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (state.token) headers["Authorization"] = "Bearer " + state.token;
+  return fetch(state.baseUrl + path, { ...opts, headers }).then(async res => {
+    let body = null;
+    const text = await res.text();
+    try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+    if (!res.ok) throw new Error(body && (body.message || (body.date && body.date.message)) || JSON.stringify(body) || res.statusText);
+    return body;
+  });
+}
+
+function decodeJwt(token) {
+  const part = token.split(".")[1];
+  const json = decodeURIComponent(escape(atob(part.replace(/-/g, "+").replace(/_/g, "/"))));
+  return JSON.parse(json);
+}
+
+function claim(payload, keys) {
+  for (const k of keys) if (payload[k] !== undefined) return payload[k];
+  return null;
+}
+
+function fmtTime(iso) { return new Date(iso).toLocaleString(); }
+
+// ---------- auth ----------
+$("tabLogin").onclick = () => { $("tabLogin").classList.add("active"); $("tabRegister").classList.remove("active"); $("loginForm").classList.remove("hidden"); $("registerForm").classList.add("hidden"); };
+$("tabRegister").onclick = () => { $("tabRegister").classList.add("active"); $("tabLogin").classList.remove("active"); $("registerForm").classList.remove("hidden"); $("loginForm").classList.add("hidden"); };
+
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    const resp = await api("/api/account/Login", {
+      method: "POST",
+      body: JSON.stringify({ email: $("loginEmail").value, password: $("loginPassword").value })
+    });
+    // response: { message, date: { token, email, name } }  (camelCased -> date)
+    const data = resp.date || resp.Date || resp;
+    setUser(data.token, data.name, data.email);
+  } catch (err) { alert("Login failed: " + err.message); }
+});
+
+$("registerForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    const resp = await api("/api/account/Register", {
+      method: "POST",
+      body: JSON.stringify({ name: $("regName").value, email: $("regEmail").value, password: $("regPassword").value })
+    });
+    alert("Registered OK. Now login.");
+    $("tabLogin").click();
+  } catch (err) { alert("Register failed: " + err.message); }
+});
+
+$("logoutBtn").onclick = () => { location.reload(); };
+
+function setUser(token, name, email) {
+  state.token = token;
+  const payload = decodeJwt(token);
+  const id = claim(payload, ["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier", "nameid", "sub"]);
+  const claimName = claim(payload, ["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name", "unique_name", "name"]);
+  state.me = { id, name: name || claimName, email };
+  localStorage.setItem("chatToken", token);
+  localStorage.setItem("chatUser", JSON.stringify(state.me));
+  $("authBox").classList.add("hidden");
+  $("userBox").classList.remove("hidden");
+  $("logoutBtn").classList.remove("hidden");
+  $("leftTitle").textContent = "Account";
+  $("userName").textContent = state.me.name;
+  $("userEmail").textContent = state.me.email;
+  $("myUserId").textContent = state.me.id;
+  $("userLabel").textContent = state.me.name;
+  connectHub();
+  refreshConversations();
+}
+
+$("myUserId").onclick = () => { navigator.clipboard.writeText(state.me.id); alert("Copied user ID"); };
+
+// ---------- connection ----------
+function setConn(on, text) {
+  $("connDot").classList.toggle("on", on);
+  $("connStatus").innerHTML = `<span class="dot ${on ? "on" : ""}"></span> ${text}`;
+}
+
+function connectHub() {
+  if (!state.token || !state.me) return;
+  const hubUrl = state.baseUrl.replace(/^http/, "ws") + "/hubs/chat?access_token=" + encodeURIComponent(state.token);
+  const conn = new signalR.HubConnectionBuilder()
+    .withUrl(hubUrl)
+    .withAutomaticReconnect()
+    .configureLogging(signalR.LogLevel.Warning)
+    .build();
+
+  conn.on("ReceiveMessage", msg => onReceiveMessage(msg));
+  conn.on("UserTyping", p => onTyping(p, true));
+  conn.on("UserStoppedTyping", p => onTyping(p, false));
+  conn.on("MessageReadBy", p => onMessageReadBy(p));
+  conn.on("UserOnline", p => { logEvent("UserOnline", p); });
+  conn.on("UserOffline", p => { logEvent("UserOffline", p); });
+
+  conn.onreconnecting(() => setConn(false, "Reconnecting..."));
+  conn.onreconnected(() => { setConn(true, "Connected"); refreshConversations(); });
+  conn.onclose(() => setConn(false, "Disconnected"));
+
+  conn.start().then(() => {
+    state.connection = conn;
+    setConn(true, "Connected to hub");
+    logEvent("HubConnected", { userId: state.me.id });
+  }).catch(err => {
+    setConn(false, "Hub failed: " + err.message);
+    logEvent("HubError", { error: err.message });
+  });
+  state.connection = conn;
+}
+
+// ---------- realtime handlers ----------
+function onReceiveMessage(msg) {
+  logEvent("ReceiveMessage", msg);
+  if (state.currentConv && state.currentConv.id === msg.conversationId) {
+    // avoid duplicates from reload
+    if (!state.messages.find(m => m.id === msg.id)) {
+      state.messages.push(msg);
+      renderMessages();
+      if (msg.senderId !== state.me.id) markRead(msg);
+    }
+  }
+  // update sidebar last message
+  const conv = state.conversations.find(c => c.id === msg.conversationId);
+  if (conv) { conv.lastMessage = msg; renderConvs(); }
+}
+
+function onTyping(p, isTyping) {
+  if (p.userId === state.me.id) return;
+  logEvent(isTyping ? "UserTyping" : "UserStoppedTyping", p);
+  if (p.conversationId !== (state.currentConv && state.currentConv.id)) return;
+  if (isTyping) state.typing[p.userId] = Date.now();
+  else delete state.typing[p.userId];
+  renderTyping();
+  if (isTyping) setTimeout(() => { if (state.typing[p.userId] && Date.now() - state.typing[p.userId] > 3500) { delete state.typing[p.userId]; renderTyping(); } }, 3500);
+}
+
+function onMessageReadBy(p) {
+  logEvent("MessageReadBy", p);
+  const msg = state.messages.find(m => m.id === p.messageId);
+  if (msg) {
+    if (!msg.readReceipts) msg.readReceipts = [];
+    if (!msg.readReceipts.find(r => r.userId === p.receipt.userId)) msg.readReceipts.push(p.receipt);
+    renderMessages();
+  }
+}
+
+// ---------- conversations ----------
+async function refreshConversations() {
+  try {
+    const list = await api("/api/chat/conversations");
+    state.conversations = list;
+    renderConvs();
+  } catch (err) {
+    logEvent("Error", { action: "GetConversations", error: err.message });
+  }
+}
+
+function convDisplayName(c) {
+  if (c.type === 1) return c.name || ("Group " + c.id);
+  const other = (c.members || []).find(m => m.userId !== state.me.id);
+  return other ? other.userName : (c.name || "Direct");
+}
+
+function renderConvs() {
+  const el = $("convList");
+  el.innerHTML = "";
+  if (!state.conversations.length) { el.innerHTML = '<div class="hint">No conversations yet.</div>'; return; }
+  state.conversations.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "conv" + (state.currentConv && state.currentConv.id === c.id ? " active" : "");
+    const others = (c.members || []).filter(m => m.userId !== state.me.id);
+    const online = others.filter(m => m.isOnline).length;
+    const last = c.lastMessage ? (c.lastMessage.content || "[attachment]") : "No messages yet";
+    div.innerHTML = `
+      <div class="name"><span>${convDisplayName(c)}</span><span class="badge">${c.type === 1 ? "group" : "DM"}</span></div>
+      <div class="last">${last}</div>
+      <div class="${online ? "online" : "offline"}">${online} / ${others.length} online</div>`;
+    div.onclick = () => openConversation(c.id);
+    el.appendChild(div);
+  });
+}
+
+$("newDmBtn").onclick = () => { $("newDmForm").classList.toggle("hidden"); $("newGroupForm").classList.add("hidden"); };
+$("newGroupBtn").onclick = () => { $("newGroupForm").classList.toggle("hidden"); $("newDmForm").classList.add("hidden"); };
+
+$("createDmBtn").onclick = async () => {
+  const target = $("dmTargetId").value.trim();
+  if (!target) return alert("Enter the target user ID");
+  try {
+    const conv = await api("/api/chat/direct", { method: "POST", body: JSON.stringify({ targetUserId: target }) });
+    $("dmTargetId").value = "";
+    $("newDmForm").classList.add("hidden");
+    await refreshConversations();
+    openConversation(conv.id);
+  } catch (err) { alert("Create DM failed: " + err.message); logEvent("Error", { action: "CreateDirect", error: err.message }); }
+};
+
+$("createGroupBtn").onclick = async () => {
+  const name = $("groupName").value.trim();
+  const ids = $("groupMembers").value.split(",").map(s => s.trim()).filter(Boolean);
+  if (!name) return alert("Group name required");
+  try {
+    const conv = await api("/api/chat/group", { method: "POST", body: JSON.stringify({ name, groupPicture: null, memberIds: ids }) });
+    $("groupName").value = ""; $("groupMembers").value = "";
+    $("newGroupForm").classList.add("hidden");
+    await refreshConversations();
+    openConversation(conv.id);
+  } catch (err) { alert("Create group failed: " + err.message); logEvent("Error", { action: "CreateGroup", error: err.message }); }
+};
+
+$("refreshConvBtn").onclick = () => refreshConversations();
+
+// ---------- chat view ----------
+async function openConversation(id) {
+  state.currentConv = state.conversations.find(c => c.id === id) || null;
+  renderConvs();
+  const c = state.currentConv;
+  $("chatTitle").textContent = convDisplayName(c);
+  $("chatSub").textContent = (c.members || []).map(m => m.userName + (m.isOnline ? " (online)" : "")).join(", ");
+  $("msgForm").classList.remove("hidden");
+  $("receiptsBtn").disabled = false;
+  $("membersTitle").classList.toggle("hidden", c.type !== 1);
+  $("membersBox").classList.toggle("hidden", c.type !== 1);
+  if (c.type === 1) renderMembers();
+
+  // load messages
+  try {
+    const msgs = await api(`/api/chat/conversations/${id}/messages?page=1&pageSize=50`);
+    state.messages = msgs || [];
+    renderMessages();
+    // mark incoming messages as read
+    state.messages.forEach(m => { if (m.senderId !== state.me.id) markRead(m); });
+  } catch (err) {
+    logEvent("Error", { action: "GetMessages", error: err.message });
+    state.messages = [];
+    renderMessages();
+  }
+}
+
+function renderMessages() {
+  const el = $("messages");
+  el.innerHTML = "";
+  if (!state.messages.length) { el.innerHTML = '<div class="empty">No messages yet. Say hi!</div>'; return; }
+  [...state.messages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt)).forEach(m => {
+    const mine = m.senderId === state.me.id;
+    const div = document.createElement("div");
+    div.className = "msg " + (mine ? "mine" : "theirs");
+    div.dataset.id = m.id;
+    let html = "";
+    if (!mine && state.currentConv && state.currentConv.type === 1) html += `<div class="sender">${m.senderName}</div>`;
+    html += `<div>${escapeHtml(m.content)}</div>`;
+    const seen = (m.readReceipts || []).filter(r => r.userId !== state.me.id).map(r => r.userName).join(", ");
+    html += `<div class="meta">${fmtTime(m.sentAt)}${seen ? ' <span class="seen">seen by ' + seen + "</span>" : ""}</div>`;
+    div.innerHTML = html;
+    el.appendChild(div);
+  });
+  el.scrollTop = el.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+let typingSent = false, typingTimer = null;
+$("msgInput").addEventListener("input", () => {
+  const conv = state.currentConv;
+  if (!conv) return;
+  const hasText = $("msgInput").value.trim().length > 0;
+  if (hasText && !typingSent && state.connection) {
+    typingSent = true;
+    state.connection.invoke("StartTyping", conv.id).catch(() => {});
+  }
+  if (!hasText && typingSent) sendStopTyping();
+});
+function sendStopTyping() {
+  if (!typingSent || !state.connection) return;
+  typingSent = false;
+  state.connection.invoke("StopTyping", state.currentConv.id).catch(() => {});
+}
+
+function renderTyping() {
+  const conv = state.currentConv;
+  const names = Object.keys(state.typing)
+    .filter(u => state.typing[u] && Date.now() - state.typing[u] < 3500)
+    .map(u => { const m = (conv && conv.members || []).find(x => x.userId === u); return m ? m.userName : "Someone"; });
+  $("typingIndicator").textContent = names.length ? names.join(", ") + " is typing..." : "";
+}
+
+$("msgForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const conv = state.currentConv;
+  const content = $("msgInput").value.trim();
+  if (!conv || !content) return;
+  sendStopTyping();
+  $("msgInput").value = "";
+  try {
+    const msg = await api("/api/chat/send", {
+      method: "POST",
+      body: JSON.stringify({ conversationId: conv.id, content, type: 0 })
+    });
+    // the server broadcasts ReceiveMessage; also add locally in case we missed it
+    if (!state.messages.find(m => m.id === msg.id)) { state.messages.push(msg); renderMessages(); }
+    const c = state.conversations.find(x => x.id === conv.id);
+    if (c) { c.lastMessage = msg; renderConvs(); }
+  } catch (err) {
+    alert("Send failed: " + err.message);
+    logEvent("Error", { action: "SendMessage", error: err.message });
+  }
+});
+
+function markRead(msg) {
+  if (msg.senderId === state.me.id) return;
+  api(`/api/chat/messages/${msg.id}/read/${msg.conversationId}`, { method: "POST" })
+    .then(() => {})
+    .catch(() => {});
+}
+
+$("receiptsBtn").onclick = async () => {
+  const conv = state.currentConv;
+  if (!conv) return;
+  // show read receipts for my latest sent message
+  const mine = [...state.messages].reverse().find(m => m.senderId === state.me.id);
+  if (!mine) return alert("No sent messages to inspect");
+  try {
+    const receipts = await api(`/api/chat/messages/${mine.id}/read-receipts`);
+    const seen = receipts.filter(r => r.userId !== state.me.id);
+    alert("Message #" + mine.id + " read receipts:\n" + (seen.length ? seen.map(r => r.userName + " @ " + fmtTime(r.readAt)).join("\n") : "Nobody has read it yet."));
+  } catch (err) { alert("Receipts failed: " + err.message); }
+};
+
+// ---------- group members ----------
+function renderMembers() {
+  const c = state.currentConv;
+  const list = $("memberList");
+  list.innerHTML = "";
+  (c.members || []).forEach(m => {
+    const div = document.createElement("div");
+    div.className = "member-row";
+    div.innerHTML = `<span>${m.userName} <span class="${m.userId === state.me.id ? "you" : ""}">${m.userId === state.me.id ? "(you)" : m.isOnline ? "●" : ""}</span></span>
+      <span style="display:flex;gap:6px">
+        <span class="badge">${m.role === 1 ? "admin" : "member"}</span>
+        ${m.userId !== state.me.id ? `<button class="small" data-remove="${m.userId}">remove</button>` : ""}
+      </span>`;
+    const btn = div.querySelector("[data-remove]");
+    if (btn) btn.onclick = () => removeMember(c.id, m.userId);
+    list.appendChild(div);
+  });
+}
+
+$("addMemberBtn").onclick = async () => {
+  const conv = state.currentConv;
+  const id = $("addMemberId").value.trim();
+  if (!conv || !id) return alert("Enter a user ID");
+  try {
+    const resp = await api(`/api/chat/group/${conv.id}/members`, { method: "POST", body: JSON.stringify(id) });
+    alert(typeof resp === "string" ? resp : resp.message);
+    $("addMemberId").value = "";
+    await refreshConversations();
+    openConversation(conv.id);
+  } catch (err) { alert("Add member failed: " + err.message); }
+};
+
+async function removeMember(convId, userId) {
+  try {
+    const resp = await api(`/api/chat/group/${convId}/members/${userId}`, { method: "DELETE" });
+    alert(typeof resp === "string" ? resp : resp.message);
+    await refreshConversations();
+    if (state.currentConv && state.currentConv.id === convId) openConversation(convId);
+  } catch (err) { alert("Remove member failed: " + err.message); }
+}
+
+// ---------- base url ----------
+$("applyBase").onclick = () => {
+  state.baseUrl = $("baseUrl").value.replace(/\/$/, "");
+  localStorage.setItem("chatBase", state.baseUrl);
+  alert("Base URL set. If you are logged in, reload the page to reconnect to the new hub.");
+};
+
+// ---------- init ----------
+$("baseUrl").value = state.baseUrl;
+const savedToken = localStorage.getItem("chatToken");
+const savedUser = JSON.parse(localStorage.getItem("chatUser") || "null");
+if (savedToken && savedUser) {
+  state.token = savedToken;
+  state.me = savedUser;
+  $("authBox").classList.add("hidden");
+  $("userBox").classList.remove("hidden");
+  $("logoutBtn").classList.remove("hidden");
+  $("userName").textContent = state.me.name;
+  $("userEmail").textContent = state.me.email;
+  $("myUserId").textContent = state.me.id;
+  $("userLabel").textContent = state.me.name;
+  connectHub();
+  refreshConversations();
+}
+</script>
+</body>
+</html>
