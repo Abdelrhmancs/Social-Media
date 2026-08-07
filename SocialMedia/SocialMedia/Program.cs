@@ -1,5 +1,6 @@
 using API;
 using API.Domain.Entites;
+using API.Hubs;
 using Application.Interfaces;
 using Application.Services;
 using Application.UseCases.Auth;
@@ -9,9 +10,11 @@ using Application.UseCases.Likes;
 using Application.UseCases.Post;
 using Application.UseCases.Shares;
 using Application.UseCases.User;
+using Application.UseCases.Chat;
 using Infrastructure.Identity;
 using Infrastructure.Presistence;
 using Infrastructure.Presistence.Repositories;
+using Infrastructure.RealTime;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +33,11 @@ namespace SocialMedia
 
             // Add services to the container.
             builder.Services.AddControllers();
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("DevCors", policy =>
+                    policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+            });
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
@@ -81,6 +89,9 @@ namespace SocialMedia
                     c.IncludeXmlComments(domainXmlPath, true);
             });
 
+            // Add SignalR
+            builder.Services.AddSignalR();
+
             builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
             builder.Services.AddDbContext<SocialMediaContext>
             (options => options.UseSqlServer(builder.Configuration.GetConnectionString("constr")));
@@ -105,6 +116,12 @@ namespace SocialMedia
             builder.Services.AddScoped<IUserContext, UserContext>();
             builder.Services.AddScoped<IUserRepository, UserRepository>();
             builder.Services.AddScoped<IUserManagerService, UserManagerService>();
+            
+            // Chat Repositories and Services
+            builder.Services.AddSingleton<IOnlineUserTracker, OnlineUserTracker>();
+            builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
+            builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+            builder.Services.AddScoped<IChatHubNotifier, ChatHubNotifier>();
 
             //Authentication usecases registeration
             builder.Services.AddScoped<LoginUseCase>();
@@ -139,6 +156,17 @@ namespace SocialMedia
             builder.Services.AddScoped<LikePostUseCase>();
             builder.Services.AddScoped<UnLikePostUseCase>();
 
+            // Chat use cases registration
+            builder.Services.AddScoped<CreateDirectConversationUseCase>();
+            builder.Services.AddScoped<CreateGroupConversationUseCase>();
+            builder.Services.AddScoped<GetUserConversationsUseCase>();
+            builder.Services.AddScoped<SendMessageUseCase>();
+            builder.Services.AddScoped<GetConversationMessagesUseCase>();
+            builder.Services.AddScoped<MarkMessageAsReadUseCase>();
+            builder.Services.AddScoped<GetMessageReadReceiptsUseCase>();
+            builder.Services.AddScoped<AddGroupMemberUseCase>();
+            builder.Services.AddScoped<RemoveGroupMemberUseCase>();
+
 
 
             builder.Services.AddHttpContextAccessor();
@@ -160,6 +188,19 @@ namespace SocialMedia
                        IssuerSigningKey = new SymmetricSecurityKey(
                            Encoding.UTF8.GetBytes(builder.Configuration["JWT:secret"]))
                    };
+                   options.Events = new JwtBearerEvents
+                   {
+                       OnMessageReceived = context =>
+                       {
+                           var accessToken = context.Request.Query["access_token"];
+                           var path = context.HttpContext.Request.Path;
+                           if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))
+                           {
+                               context.Token = accessToken;
+                           }
+                           return Task.CompletedTask;
+                       }
+                   };
                });
 
             var app = builder.Build();
@@ -173,10 +214,12 @@ namespace SocialMedia
 
             app.UseHttpsRedirection();
 
+            app.UseCors("DevCors");
+
             app.UseAuthorization();
 
-
             app.MapControllers();
+            app.MapHub<ChatHub>("/hubs/chat");
 
             app.Run();
         }
