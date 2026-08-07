@@ -66,6 +66,76 @@ namespace Infrastructure.Migrations
                     b.ToTable("comments", (string)null);
                 });
 
+            modelBuilder.Entity("API.Domain.Entites.Conversation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<string>("GroupPicture")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("group_picture");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("conversations", (string)null);
+                });
+
+            modelBuilder.Entity("API.Domain.Entites.ConversationMember", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("joined_at")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int")
+                        .HasColumnName("role");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ConversationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("conversation_members", (string)null);
+                });
+
             modelBuilder.Entity("API.Domain.Entites.Follow", b =>
                 {
                     b.Property<long>("Id")
@@ -133,6 +203,87 @@ namespace Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("likes", (string)null);
+                });
+
+            modelBuilder.Entity("API.Domain.Entites.Message", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("content");
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("SenderId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("sender_id");
+
+                    b.Property<DateTime>("SentAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("sent_at")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("SenderId");
+
+                    b.ToTable("messages", (string)null);
+                });
+
+            modelBuilder.Entity("API.Domain.Entites.MessageReadReceipt", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("MessageId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("message_id");
+
+                    b.Property<DateTime>("ReadAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("read_at")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("MessageId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("message_read_receipts", (string)null);
                 });
 
             modelBuilder.Entity("API.Domain.Entites.Notification", b =>
@@ -488,6 +639,24 @@ namespace Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("API.Domain.Entites.ConversationMember", b =>
+                {
+                    b.HasOne("API.Domain.Entites.Conversation", "Conversation")
+                        .WithMany("Members")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Domain.Entites.User", "User")
+                        .WithMany("ConversationMembers")
+                        .HasForeignKey("UserId")
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("API.Domain.Entites.Follow", b =>
                 {
                     b.HasOne("API.Domain.Entites.User", "Followed")
@@ -518,6 +687,42 @@ namespace Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Post");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("API.Domain.Entites.Message", b =>
+                {
+                    b.HasOne("API.Domain.Entites.Conversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Domain.Entites.User", "Sender")
+                        .WithMany("SentMessages")
+                        .HasForeignKey("SenderId")
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("API.Domain.Entites.MessageReadReceipt", b =>
+                {
+                    b.HasOne("API.Domain.Entites.Message", "Message")
+                        .WithMany("ReadReceipts")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Domain.Entites.User", "User")
+                        .WithMany("MessageReadReceipts")
+                        .HasForeignKey("UserId")
+                        .IsRequired();
+
+                    b.Navigation("Message");
 
                     b.Navigation("User");
                 });
@@ -623,6 +828,18 @@ namespace Infrastructure.Migrations
                     b.Navigation("InverseParentComment");
                 });
 
+            modelBuilder.Entity("API.Domain.Entites.Conversation", b =>
+                {
+                    b.Navigation("Members");
+
+                    b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("API.Domain.Entites.Message", b =>
+                {
+                    b.Navigation("ReadReceipts");
+                });
+
             modelBuilder.Entity("API.Domain.Entites.Post", b =>
                 {
                     b.Navigation("Comments");
@@ -636,17 +853,23 @@ namespace Infrastructure.Migrations
                 {
                     b.Navigation("Comments");
 
+                    b.Navigation("ConversationMembers");
+
                     b.Navigation("FollowFolloweds");
 
                     b.Navigation("FollowFollowers");
 
                     b.Navigation("Likes");
 
+                    b.Navigation("MessageReadReceipts");
+
                     b.Navigation("NotificationSenders");
 
                     b.Navigation("NotificationUsers");
 
                     b.Navigation("Posts");
+
+                    b.Navigation("SentMessages");
 
                     b.Navigation("Shares");
                 });
