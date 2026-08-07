@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
 
@@ -19,4 +19,7 @@ public class User : IdentityUser
     public virtual ICollection<Notification> NotificationUsers { get; set; } = new List<Notification>();
     public virtual ICollection<Post> Posts { get; set; } = new List<Post>();
     public virtual ICollection<Share> Shares { get; set; } = new List<Share>();
+    public virtual ICollection<ConversationMember> ConversationMembers { get; set; } = new List<ConversationMember>();
+    public virtual ICollection<Message> SentMessages { get; set; } = new List<Message>();
+    public virtual ICollection<MessageReadReceipt> MessageReadReceipts { get; set; } = new List<MessageReadReceipt>();
 }
