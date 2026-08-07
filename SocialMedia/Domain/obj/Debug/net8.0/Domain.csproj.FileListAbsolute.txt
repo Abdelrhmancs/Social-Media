@@ -24,3 +24,16 @@ D:\social media project\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.
 D:\social media project\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\refint\Domain.dll
 D:\social media project\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.pdb
 D:\social media project\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\ref\Domain.dll
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\bin\Debug\net8.0\Domain.deps.json
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\bin\Debug\net8.0\Domain.dll
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\bin\Debug\net8.0\Domain.pdb
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.csproj.AssemblyReference.cache
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.GeneratedMSBuildEditorConfig.editorconfig
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.AssemblyInfoInputs.cache
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.AssemblyInfo.cs
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.csproj.CoreCompileInputs.cache
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.sourcelink.json
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.dll
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\refint\Domain.dll
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\Domain.pdb
+H:\azooz\Software Engineering\C# projects\Social-Media\SocialMedia\Domain\obj\Debug\net8.0\ref\Domain.dll
